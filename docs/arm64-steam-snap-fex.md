@@ -35,9 +35,13 @@ paths outside `$SNAP_USER_COMMON` are not in the bind pressure-vessel makes of
 ## 1. Cross toolchain
 
 ```
-sudo apt-get install g++-x86-64-linux-gnu gcc-x86-64-linux-gnu \
-     libc6-dev-amd64-cross libstdc++-13-dev-amd64-cross
+sudo apt-get install g++-x86-64-linux-gnu gcc-x86-64-linux-gnu
 ```
+
+These are meta-packages that depend on the release's default cross GCC, which
+in turn pulls the matching target `libc6-dev-amd64-cross` and
+`libstdc++-N-dev-amd64-cross`. Do not name a GCC version explicitly: it will
+not exist on releases whose default toolchain is newer or older.
 
 ## 2. Build for x86_64
 

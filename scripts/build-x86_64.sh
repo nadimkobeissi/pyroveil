@@ -13,8 +13,9 @@ BUILD=build-x86_64
 
 if ! command -v x86_64-linux-gnu-g++ >/dev/null; then
 	echo "Missing x86_64 cross compiler. On Ubuntu/Debian:" >&2
-	echo "  sudo apt-get install g++-x86-64-linux-gnu gcc-x86-64-linux-gnu \\" >&2
-	echo "       libc6-dev-amd64-cross libstdc++-13-dev-amd64-cross" >&2
+	echo "  sudo apt-get install g++-x86-64-linux-gnu gcc-x86-64-linux-gnu" >&2
+	echo "Those pull the matching target libc/libstdc++ headers automatically," >&2
+	echo "so there is no need to name a GCC version." >&2
 	exit 1
 fi
 
