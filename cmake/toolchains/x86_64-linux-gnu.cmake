@@ -1,0 +1,16 @@
+# Cross-compile the layer for x86_64 from an ARM64 host.
+#
+# On ARM64 machines that run Steam through FEX (NVIDIA DGX Spark, the Steam
+# snap on aarch64), the games execute as x86_64 and load an x86_64 Vulkan
+# loader and ICD. The layer must be built for that ABI or the loader rejects
+# it and the layer is silently never loaded.
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR x86_64)
+
+set(CMAKE_C_COMPILER   x86_64-linux-gnu-gcc)
+set(CMAKE_CXX_COMPILER x86_64-linux-gnu-g++)
+
+set(CMAKE_FIND_ROOT_PATH /usr/x86_64-linux-gnu /usr)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY BOTH)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)
