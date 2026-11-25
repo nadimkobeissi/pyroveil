@@ -7,8 +7,12 @@
 set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR x86_64)
 
-set(CMAKE_C_COMPILER   x86_64-linux-gnu-gcc)
-set(CMAKE_CXX_COMPILER x86_64-linux-gnu-g++)
+# Seeded as cache entries so callers can swap the compiler (a versioned binary,
+# a launcher, clang --target=...) without editing this file. Non-FORCE keeps
+# these as defaults; CMAKE_SYSTEM_NAME/PROCESSOR stay forced because the whole
+# point of this file is to target x86_64.
+set(CMAKE_C_COMPILER   x86_64-linux-gnu-gcc   CACHE STRING "Cross-compile C compiler")
+set(CMAKE_CXX_COMPILER x86_64-linux-gnu-g++   CACHE STRING "Cross-compile C++ compiler")
 
 set(CMAKE_FIND_ROOT_PATH /usr/x86_64-linux-gnu /usr)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY BOTH)
