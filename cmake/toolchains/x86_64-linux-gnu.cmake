@@ -14,7 +14,16 @@ set(CMAKE_SYSTEM_PROCESSOR x86_64)
 set(CMAKE_C_COMPILER   x86_64-linux-gnu-gcc   CACHE STRING "Cross-compile C compiler")
 set(CMAKE_CXX_COMPILER x86_64-linux-gnu-g++   CACHE STRING "Cross-compile C++ compiler")
 
-set(CMAKE_FIND_ROOT_PATH /usr/x86_64-linux-gnu /usr)
-set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY BOTH)
-set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH)
+# Only the multiarch sysroot may satisfy library/include searches. With BOTH,
+# find_library()/find_path() also walk the host tree: verified by planting an
+# aarch64 libpyrodecoy.so in /usr/lib, which BOTH resolved into the x86_64 link
+# and ONLY refused. The bare /usr must stay out of CMAKE_FIND_ROOT_PATH as well -
+# with it present, ONLY still finds host libraries.
+#
+# PROGRAM is NEVER so host build tools are used, and PACKAGE stays BOTH because
+# the bundled shaderc/glslang locate host tools (python3, git) via find_package().
+set(CMAKE_FIND_ROOT_PATH /usr/x86_64-linux-gnu)
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)
