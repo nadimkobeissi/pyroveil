@@ -22,7 +22,14 @@ SUC="${SUC:-$HOME/snap/steam/common}"
 SRC_LIB="${SRC_LIB:-$HOME/pyroveil-x86_64/lib/libVkLayer_pyroveil_64.so}"
 SRC_JSON="${SRC_JSON:-$HOME/pyroveil-x86_64/share/vulkan/implicit_layer.d/VkLayer_pyroveil_64.json}"
 HACK="${HACK:-hacks/re-village-nvidia/pyroveil.json}"
-NAME="$(basename "$(dirname "$HACK")")"
+HACK_DIR="$(dirname "$HACK")"
+# A bare "pyroveil.json" makes NAME ".", which would both misplace the config
+# and make the cache glob below read the repo root instead of the hack's cache/.
+if [ "$HACK_DIR" = . ]; then
+	echo "HACK must be a path under hacks/, e.g. HACK=hacks/re-village-nvidia/pyroveil.json" >&2
+	exit 1
+fi
+NAME="$(basename "$HACK_DIR")"
 DEST="$SUC/pyroveil"
 
 [ -f "$SRC_LIB" ] || { echo "no layer built at $SRC_LIB - run scripts/build-x86_64.sh first" >&2; exit 1; }
@@ -55,6 +62,28 @@ json.dump(d, open(path, "w"), indent=4)
 PY
 
 copy_as "$HACK" "$DEST/$NAME/pyroveil.json"
+
+# A hack may ship pre-patched SPIR-V in a cache/ beside its config. Those files
+# are the actual fix for games where the roundtrip alone is not enough (see
+# hacks/monster-hunter-wilds-benchmark-nv), and the layer reads back only the
+# .spv it finds there - the .asm dumps are the editing artifacts, not inputs,
+# so they stay in the repo. Never deleted here: a game update changes the
+# module hash, so a stale patch simply stops matching.
+if [ -d "$HACK_DIR/cache" ]; then
+	patched=0
+	for spv in "$HACK_DIR"/cache/*.spv; do
+		[ -e "$spv" ] || continue
+		copy_as "$spv" "$DEST/$NAME/cache/$(basename "$spv")"
+		patched=$((patched + 1))
+	done
+	if [ "$patched" -gt 0 ]; then
+		echo "installed $patched pre-patched shader(s) from $HACK_DIR/cache"
+	elif grep -q '"roundtripCache"' "$HACK"; then
+		# A cache/ with no .spv is the silent failure this copy exists to prevent.
+		echo "warning: $HACK declares roundtripCache but $HACK_DIR/cache has no .spv - every launch re-runs the roundtrip" >&2
+	fi
+fi
+
 # cache/ must exist and be writable: the layer writes patched SPIR-V there and
 # silently skips it if the directory is missing.
 chmod -R u+rwX "$DEST/$NAME"

@@ -74,6 +74,26 @@ It also creates the `cache/` directory next to the config. A hack that declares
 and silently does nothing if the directory is absent, so without it every
 launch re-runs the SPIRV-Cross to glslang roundtrip and nothing is persisted.
 
+If the hack ships pre-patched SPIR-V next to its config, that `cache/*.spv` is
+copied too. For those games the committed file is the fix, and an empty cache
+means the layer quietly falls back to the roundtrip:
+
+```
+HACK=hacks/monster-hunter-wilds-benchmark-nv/pyroveil.json scripts/install-steam-snap-layer.sh
+```
+
+Re-running overwrites installed patches with the committed ones, but never
+deletes. If a patch is renamed or removed under `hacks/<game>/cache`, delete
+`$SNAP_USER_COMMON/pyroveil/<game>/cache` and re-run, or the layer keeps
+serving the obsolete file. Close the game first: the copy is not atomic and the
+guest reads that directory while it runs.
+
+`tests/test-install-cache.sh` covers this install path and runs on any host:
+
+```
+bash tests/test-install-cache.sh
+```
+
 Only the manifest lives inside the rootfs, and the Steam snap deletes and
 re-extracts `x86_rootfs` when it updates. Re-run the script after a snap update.
 
@@ -119,6 +139,15 @@ scripts/check-ingame.sh <appid>
 The authoritative check is that `libVkLayer_pyroveil_64.so` appears in
 `/proc/<game pid>/maps`. The log and the cache corroborate it.
 
+For a hack that ships pre-patched shaders, the log line that proves the
+committed file is actually being served is:
+
+```
+pyroveil: Pulled /home/.../cache/97ccc02f3db80d2e.spv from roundtrip cache.
+```
+
+Without it the layer loaded and matched, but fell back to the roundtrip.
+
 ## Troubleshooting
 
 | Symptom | Cause |
@@ -128,6 +157,7 @@ The authoritative check is that `libVkLayer_pyroveil_64.so` appears in
 | `VK_ERROR_LAYER_NOT_PRESENT` | Wrong ABI, or manifest not in a searched directory |
 | `DISCOVERED ... NO` | Manifest missing from the rootfs implicit layer directory |
 | Cache stays empty though the layer is loaded | `cache/` missing or not writable next to the config |
+| A pre-patched hack still misbehaves | No `Pulled ... from roundtrip cache` in the log - installed before the cache was copied, or `cache/*.spv` was overwritten. Re-run the installer and diff against `hacks/<game>/cache` |
 | Works, then breaks after a Steam snap update | `x86_rootfs` was re-extracted, re-run the installer |
 | `re8.exe` style `Xid 109 CTX SWITCH TIMEOUT` in `dmesg` | The driver fault the hack exists to work around |
 
