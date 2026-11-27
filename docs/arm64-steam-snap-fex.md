@@ -148,14 +148,75 @@ pyroveil: Pulled /home/.../cache/97ccc02f3db80d2e.spv from roundtrip cache.
 
 Without it the layer loaded and matched, but fell back to the roundtrip.
 
+## 6. FEX library forwarding (thunking)
+
+FEX can forward `libGL` and `libvulkan` from the x86_64 guest to the native
+aarch64 libraries, skipping emulation overhead
+([FEX wiki](https://wiki.fex-emu.com/index.php/Development:Setting_up_Thunks),
+[Canonical](https://discourse.ubuntu.com/t/canonical-s-steam-snap-is-now-stable-on-arm64/83664)).
+The snap exposes this in `$SNAP_USER_COMMON/fex_config/Config.json` and ships it
+disabled:
+
+```
+"ThunksDB": { "Vulkan": 0, "GL": 0, "asound": 0, "drm": 0, "WaylandClient": 0 }
+```
+
+**Do not set `Vulkan` or `GL` to `1` there.** The Steam client is itself an
+x86_64 FEX process, and forwarding its `libGL` breaks GLX visual selection. The
+client aborts during startup, before the UI, in a way that looks nothing like a
+layer problem:
+
+```
+Running query: 1 - GpuTopology
+src/surface_linux.cpp (2002) : glXChooseVisual failed
+src/surface_linux.cpp (2002) : Fatal assert; application exiting
+```
+
+Setting `GL` back to `0` is what brings the client back; the assert disappears
+and `GpuTopology` completes with the GB10 as `default_gpu_id`.
+
+Forwarding also defeats this layer. With `libvulkan` thunked, the guest lands on
+the host's aarch64 loader and never sees the x86_64 manifest, so the layer
+vanishes without an error that points at it. Measured on GB10, NVIDIA
+580.178.04, snap 1.0.0.87, using `scripts/verify-vulkan-layer.sh`:
+
+| `ThunksDB` `Vulkan`/`GL` | Per-app opt-out for `re8.exe` | Probe result |
+|---|---|---|
+| `0` (default) | - | 14 layers, `DISCOVERED ... YES`, `VK_SUCCESS` |
+| `1` | - | 9 layers, `DISCOVERED ... NO`, `-6` (`VK_ERROR_LAYER_NOT_PRESENT`) |
+| `1` | yes | 14 layers, `DISCOVERED ... YES`, `VK_SUCCESS` |
+
+Forwarding is therefore only usable per game, and any game that needs a hack has
+to opt *out* of it. Set that in
+`$SNAP_USER_COMMON/fex_config/AppConfig/<exe>.json`, alongside the `client.json`
+and `steamwebhelper.json` the snap already ships:
+
+```
+{"ThunksDB": {"Vulkan": 0, "GL": 0}}
+```
+
+Name the file after the game's own executable (`re8.exe` for RE Village).
+Games that do not depend on the layer then inherit whatever the global config
+says.
+
+The FEX code cache (`"DiskCache": "1"`) is separate from all of this and
+rendering-independent - it stops the x86 code being re-JITted on every launch
+and lands in `$SNAP_USER_COMMON/.cache/fex-emu/DiskCache/*.foz`. It is safe to
+try, but apply one option at a time and confirm the client starts before
+launching a game. Re-run `scripts/verify-vulkan-layer.sh` after any FEX config
+change, before blaming a hack.
+
 ## Troubleshooting
 
 | Symptom | Cause |
 |---|---|
 | No `pyroveil:` lines in the Proton log at all | Layer not loaded, or `PROTON_LOG_DIR` outside `$SNAP_USER_COMMON` |
 | `Found config` but no `Found match` | Config matched no shader, check the hack against the game build |
-| `VK_ERROR_LAYER_NOT_PRESENT` | Wrong ABI, or manifest not in a searched directory |
+| `VK_ERROR_LAYER_NOT_PRESENT` | Wrong ABI, manifest not in a searched directory, or `libvulkan` is being thunked (see §6) |
 | `DISCOVERED ... NO` | Manifest missing from the rootfs implicit layer directory |
+| Steam itself aborts at `glXChooseVisual failed` in `steamsysinfo` | `GL` thunking enabled globally in `fex_config/Config.json` - set it back to `0` (see §6) |
+| Layer loaded before, `DISCOVERED ... NO` after a FEX change | `Vulkan` thunking bypasses the guest loader - add `AppConfig/<exe>.json` opting that game out (see §6) |
+| Game runs at single-digit FPS while the GPU sits idle in `nvidia-smi` | The game picked an `llvmpipe` software device, which enumerates with huge "VRAM" - check `GpuTopology` reports `default_gpu_id` as the GB10 |
 | Cache stays empty though the layer is loaded | `cache/` missing or not writable next to the config |
 | A pre-patched hack still misbehaves | No `Pulled ... from roundtrip cache` in the log - installed before the cache was copied, or `cache/*.spv` was overwritten. Re-run the installer and diff against `hacks/<game>/cache` |
 | Works, then breaks after a Steam snap update | `x86_rootfs` was re-extracted, re-run the installer |
